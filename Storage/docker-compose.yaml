@@ -1,0 +1,68 @@
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper:latest
+    restart: unless-stopped
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - order-processing-service-network
+
+  kafka:
+    image: wurstmeister/kafka:latest
+    restart: unless-stopped
+    environment:
+      KAFKA_LOG_DIRS: /kafka-data
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_LISTENERS: EXTERNAL://:9092,INTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: EXTERNAL://127.0.0.1:8001,INTERNAL://kafka:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT
+      ALLOW_PLAINTEXT_LISTENER: yes
+      KAFKA_CREATE_TOPICS: >
+        client-topic:1:1,
+        account-topic:1:1
+    depends_on:
+      - zookeeper
+    networks:
+      - order-processing-service-network
+    volumes:
+      - order-processing-service-kafka-data:/kafka-data
+    ports:
+      - '8001:9092'
+
+  postgres:
+    image: postgres:latest
+    container_name: storage_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: storage_user
+      POSTGRES_PASSWORD: storage_pass
+      POSTGRES_DB: storage_db
+    ports:
+      - "5434:5432"
+    networks:
+      - order-processing-service-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    restart: unless-stopped
+    ports:
+      - "8085:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: kafka-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9094
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    depends_on:
+      - kafka
+    networks:
+      - order-processing-service-network
+
+
+networks:
+  order-processing-service-network:
+    driver: bridge
+
+volumes:
+  order-processing-service-kafka-data:
